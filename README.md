@@ -103,3 +103,24 @@ And another one:
     ./zeroes.py --out picture.png --size 1000 --radius 100 --degrees 1-10 --coeffs 0,1,2 --xmin -3 --xmax 2 --ymin -2 --ymax 2 --colors 255,255,0:255,128,0:0,255,255
 
 The program `animate.py` uses `zeroes.py` to generate a sequence of images which can then be composed into a movie. The movie shows what happens when we smoothly change the coefficients.
+
+### Compiling against MPSolve
+
+You can use MPSolve routines to solve polynomials instead of GSL's ones. Just run `make clean' to delete the compiled version of zeroes
+and then edit the Makefile as suggested. 
+
+You will need a locally compiled version of MPSolve. The LIBS and CFLAGS variables work
+for the case where the `zeroes' folder containing this repository is at the same level of another called mpsolve containing MPSolve sources
+that should be build inside a folder named `_build': 
+
+    parent_folder/
+    |-- zeroes/
+    |-- mpsolve/
+        |-- _build/
+
+You can obtain this setup by running the following commands in the parent directory
+with respect to this repository: 
+
+    $ git clone git://github.com/robol/MPSolve.git mpsolve
+    $ cd mpsolve && ./autogen.sh && mkdir _build && cd _build && ../configure
+    $ make

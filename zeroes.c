@@ -1,8 +1,13 @@
 #include <stdio.h>
 #include <math.h>
+#include <time.h>
+
+#ifdef USE_MPSOLVE
+#include <mps/mps.h>
+#else
 #include <gsl/gsl_poly.h>
 #include <gsl/gsl_errno.h>
-#include <time.h>
+#endif
 
 int main (int argc, char* argv[])
 {
@@ -48,8 +53,10 @@ int main (int argc, char* argv[])
   const unsigned int count_bound = 0xffffffff;
   unsigned int max_count = 0 ;
 
+#ifndef USE_MPSOLVE
   /* Turn off the GSL error handler that aborts on error (some polynomials have tricky zeroes) */
   gsl_set_error_handler_off ();
+#endif
 
   /* We're going to skip zeroes whose imaginary part is almost zero. */
   const double epsilon = 1.0e-20 ;
@@ -63,40 +70,80 @@ int main (int argc, char* argv[])
     fprintf (stderr, "Degree %d (%.2lf seconds)\n", d, difftime(now, start));
     /* Initialize the polynomial. */
     double poly[d+1];
+
     for (int j = 0; j <= d; j++) { poly[j] = coeff[0]; } 
     /* Initialize the counters. */
     int counter[d+1];
     for (int j = 0; j <= d; j++) { counter[j] = 0; }
     int j = 0;
+
+#ifndef USE_MPSOLVE
     /* Allocate the workspace. */
     gsl_poly_complex_workspace *w = gsl_poly_complex_workspace_alloc(d+1);
+#endif
+
     do {
+
       /* Compute the zeroes if head coefficient is non-zero. */
       if (poly[d] > epsilon || poly[d] < -epsilon) {
+
         double z[2*d]; /* the zeroes are stored here */
+#ifdef USE_MPSOLVE
+	mps_context * ctx = mps_context_new ();
+	mps_monomial_poly * mp = mps_monomial_poly_new (ctx, d);
+	cplx_t * zz = NULL;
+	
+	for (int j = 0; j <= d; j++) { 
+	  mps_monomial_poly_set_coefficient_int (ctx, mp, j, poly[j], 0);
+	}
+	
+	mps_context_set_input_poly (ctx, MPS_POLYNOMIAL (mp));
+	mps_context_set_output_prec (ctx, 8);
+	mps_mpsolve (ctx);
+
+	int status = mps_context_has_errors (ctx);
+
+	if (! status)
+	  {
+	    mps_context_get_roots_d (ctx, &zz, NULL);
+
+	    for (int i = 0; i < d; i++)
+	      {
+		z[2*i] = cplx_Re (zz[i]);
+		z[2*i+1] = cplx_Im (zz[i]);
+	      }
+
+	    free (zz);
+	  }
+
+	/* Deallocate workspace. */
+	mps_monomial_poly_free (ctx, MPS_POLYNOMIAL (mp));
+	mps_context_free (ctx);	
+#else
         int status = gsl_poly_complex_solve (poly, d+1, w, z);
-        /* Only use zeroes if GSL reported success */
-        if (status == 0) {
-          /* Draw zeroes, skipping the real ones that are away from the origin */
-          for (int i=0; i < d; i++) {
-            if (-epsilon < z[2*i+1] && z[2*i+1] < epsilon && (z[2*i] < -0.5 || z[2*i] > 0.5)) {
-              continue;
-            }
-            int x = (int)((xres * (z[2*i] - xmin)) / (xmax - xmin));
-            int y = yres - (int)((yres * (z[2*i+1] - ymin)) / (ymax - ymin));
-            if (0 <= x && x < xres && 0 <= y && y < yres && image[xres * y + x] < count_bound) {
-              int c = ++image[xres * y + x];
-              if (max_count < c) { max_count = c; }
-            }
-          }
-        }
+#endif
+
+
+
+	if (status == 0) {
+	  /* Draw zeroes, skipping the real ones that are away from the origin */
+	  for (int i=0; i < d; i++) {
+	    if (-epsilon < z[2*i+1] && z[2*i+1] < epsilon && (z[2*i] < -0.5 || z[2*i] > 0.5)) {
+	      continue;
+	    }
+	    int x = (int)((xres * (z[2*i] - xmin)) / (xmax - xmin));
+	    int y = yres - (int)((yres * (z[2*i+1] - ymin)) / (ymax - ymin));
+	    if (0 <= x && x < xres && 0 <= y && y < yres && image[xres * y + x] < count_bound) {
+	      int c = ++image[xres * y + x];
+	      if (max_count < c) { max_count = c; }
+	    }
+	  }
+	}
       }
       /* calculate the next polynomial */
       for (j = 0; j <= d && counter[j] == ci_max-1; j++) { counter[j] = 0; poly[j] = coeff[0]; }
       if (j <= d) { counter[j]++; poly[j] = coeff[counter[j]]; }
     } while (j <= d);
-    /* Deallocate workspace. */
-    gsl_poly_complex_workspace_free (w);
   }
 
   /* Output the computed result. */
