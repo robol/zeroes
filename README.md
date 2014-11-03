@@ -124,3 +124,13 @@ with respect to this repository:
     $ git clone git://github.com/robol/MPSolve.git mpsolve
     $ cd mpsolve && ./autogen.sh && mkdir _build && cd _build && ../configure
     $ make
+
+You can then run the executable by exporting these variables: 
+
+    $ export MPS_JOBS=1
+    $ export LD_LIBRARY_PATH=../mpsolve/src/libmps/.libs 
+    $ ./zeroes ...
+
+Settings MPS_JOBS to 1 disables multithreading. This is likely to be faster on most computers
+for low degree polynomials, since the cost of setting up the infrastructure needed to share
+the work among the processors can actually be higher than the cost required to solve the polynomial.
